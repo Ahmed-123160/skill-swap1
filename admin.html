@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Skill Swap</title>
+    <link rel="stylesheet" href="common.css">
+    <style>
+        .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tab {
+            background: white; border: 2px solid transparent; color: #555;
+            padding: 10px 20px; border-radius: 30px; cursor: pointer; font-size: 15px;
+        }
+        .tab.active { border-color: var(--primary); color: var(--primary); font-weight: bold; }
+        .tab .nav-badge { margin-left: 6px; }
+        .bar-row { display: grid; grid-template-columns: 110px 1fr 40px; gap: 10px; align-items: center; font-size: 14px; margin: 6px 0; }
+        .bar-track { background: var(--bg); border-radius: 6px; height: 14px; overflow: hidden; }
+        .bar-fill { background: var(--primary); height: 100%; border-radius: 6px; }
+        .bar-num { text-align: right; font-variant-numeric: tabular-nums; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        th { color: var(--muted); font-weight: 600; font-size: 13px; }
+        .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .filter-row select, .filter-row input { padding: 9px 12px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; background: white; }
+        .report-body { display: flex; flex-direction: column; gap: 8px; }
+        .check-line { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div id="app-header"></div>
+
+    <div class="container stack">
+        <div>
+            <h1 class="page-title">Admin</h1>
+            <p class="muted">Review videos and reports, manage users and skills.</p>
+        </div>
+
+        <div class="tabs" role="tablist">
+            <button class="tab" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="videos">Videos <span id="badgeVideos" class="nav-badge" hidden></span></button>
+            <button class="tab" data-tab="reports">Reports <span id="badgeReports" class="nav-badge" hidden></span></button>
+            <button class="tab" data-tab="users">Users</button>
+            <button class="tab" data-tab="skills">Skills</button>
+        </div>
+
+        <div id="panel" class="stack"><div class="empty">Loading...</div></div>
+    </div>
+
+    <!-- سبب الرفض -->
+    <div id="rejectModal" class="modal-backdrop" hidden>
+        <div class="modal">
+            <h3>Reject video</h3>
+            <div class="field">
+                <label for="rejectReason">Reason (the owner will see it)</label>
+                <textarea id="rejectReason" maxlength="255" placeholder="e.g. The audio is not clear"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray btn-sm" id="rejectCancel">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="rejectSave">Reject</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script>
+        const me = requireAdmin();
+        let tab = 'overview';
+        let rejectVideoId = null;
+        let videoFilter = 'pending';
+        let reportFilter = 'open';
+        let usersCache = [];
+        let catalog = [];          // المهارات
+        let extraCategories = {};  // تصنيفات جديدة لسه مفيهاش مهارات
+
+        if (me) init();
+
+        function init() {
+            renderHeader('admin');
+            const fromHash = location.hash.replace('#', '');
+            if (['overview', 'videos', 'reports', 'users', 'skills'].includes(fromHash)) tab = fromHash;
+            document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+            document.getElementById('panel').addEventListener('click', onClick);
+            document.getElementById('panel').addEventListener('change', onChange);
+            document.getElementById('panel').addEventListener('input', onInput);
+            document.getElementById('panel').addEventListener('submit', onSubmit);
+            document.getElementById('rejectCancel').onclick = () => closeModal('rejectModal');
+            document.getElementById('rejectSave').onclick = confirmReject;
+            showTab(tab);
+            if (tab !== 'overview') loadBadges();
+        }
+
+        // أرقام التنبيه على التبويبات (لو فتحنا الصفحة على تبويب غير النظرة العامة)
+        async function loadBadges() {
+            const res = await apiFetch('/api/admin/stats').catch(() => null);
+            if (res && res.ok) {
+                setBadge('badgeVideos', (res.data.videos || {}).pending || 0);
+                setBadge('badgeReports', res.data.open_reports || 0);
+            }
+        }
+
+        async function showTab(name) {
+            tab = name;
+            history.replaceState(null, '', '#' + name);
+            document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+            const panel = document.getElementById('panel');
+            panel.innerHTML = '<div class="empty">Loading...</div>';
+            if (name === 'overview') await renderOverview();
+            if (name === 'videos') await renderVideos();
+            if (name === 'reports') await renderReports();
+            if (name === 'users') await renderUsers();
+            if (name === 'skills') await renderSkills();
+        }
+
+        function setBadge(id, n) {
+            const el = document.getElementById(id);
+            el.textContent = n;
+            el.hidden = !n;
+        }
+
+        function put(html) { document.getElementById('panel').innerHTML = html; }
+
+        // ---------- نظرة عامة ----------
+        function bars(obj, order) {
+            const keys = order.filter(k => k in obj).concat(Object.keys(obj).filter(k => !order.includes(k)));
+            const max = Math.max(1, ...keys.map(k => obj[k]));
+            if (!keys.length) return '<div class="empty">No data yet</div>';
+            return keys.map(k => `<div class="bar-row"><span>${escapeHtml(k)}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:${(obj[k] / max * 100).toFixed(1)}%"></div></div>
+                <span class="bar-num">${obj[k]}</span></div>`).join('');
+        }
+
+        async function renderOverview() {
+            const res = await call('/api/admin/stats');
+            if (!res.ok) return put('<div class="card empty">Could not load statistics.</div>');
+            const s = res.data;
+            setBadge('badgeVideos', (s.videos || {}).pending || 0);
+            setBadge('badgeReports', s.open_reports || 0);
+            const top = s.top_requested_skills || [];
+            const topMax = Math.max(1, ...top.map(t => t.requests));
+            put(`
+                <div class="stat-grid">
+                    <div class="stat-card"><div class="stat-number">${s.users}</div><div>Users</div></div>
+                    <div class="stat-card"><div class="stat-number">${s.active_users}</div><div>Active users</div></div>
+                    <div class="stat-card"><div class="stat-number">${s.skills}</div><div>Skills</div></div>
+                    <div class="stat-card"><div class="stat-number">${(s.videos || {}).pending || 0}</div><div>Videos to review</div></div>
+                    <div class="stat-card"><div class="stat-number">${s.open_reports}</div><div>Open reports</div></div>
+                </div>
+                <div class="two-col">
+                    <div class="card"><h3>Swap requests</h3>${bars(s.requests || {}, ['pending', 'accepted', 'rejected', 'cancelled'])}</div>
+                    <div class="card"><h3>Sessions</h3>${bars(s.sessions || {}, ['scheduled', 'completed', 'cancelled'])}</div>
+                </div>
+                <div class="two-col">
+                    <div class="card"><h3>Videos</h3>${bars(s.videos || {}, ['pending', 'approved', 'rejected'])}</div>
+                    <div class="card"><h3>Most requested skills</h3>
+                        ${top.length ? top.map(t => `<div class="bar-row"><span title="${escapeHtml(t.name)}" style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.name)}</span>
+                            <div class="bar-track"><div class="bar-fill" style="width:${(t.requests / topMax * 100).toFixed(1)}%"></div></div>
+                            <span class="bar-num">${t.requests}</span></div>`).join('') : '<div class="empty">No requests yet</div>'}
+                    </div>
+                </div>
+                <div class="card"><h3>Top rated teachers</h3>
+                    ${(s.top_teachers || []).length ? `<div class="table-wrap"><table>
+                        <tr><th>Teacher</th><th>Rating</th><th>Reviews</th><th>Sessions</th></tr>
+                        ${s.top_teachers.map(t => `<tr><td><a class="person" style="color:var(--primary);text-decoration:none;font-weight:bold" href="profile.html?id=${Number(t.id)}">${escapeHtml(t.name)}</a></td>
+                            <td>${stars(t.avg_rating, t.reviews_count)}</td><td>${t.reviews_count}</td><td>${t.completed_sessions}</td></tr>`).join('')}
+                    </table></div>` : '<div class="empty">No reviews yet</div>'}
+                </div>`);
+        }
+
+        // ---------- الفيديوهات ----------
+        async function renderVideos() {
+            const res = await call('/api/admin/videos?status=' + videoFilter);
+            if (!res.ok) return put('<div class="card empty">Could not load videos.</div>');
+            if (videoFilter === 'pending') setBadge('badgeVideos', res.data.videos.length);
+            const list = res.data.videos;
+            put(`<div class="filter-row"><label for="videoFilter">Show</label>
+                    <select id="videoFilter">${['pending', 'approved', 'rejected'].map(s =>
+                        `<option value="${s}" ${s === videoFilter ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+                 ${list.length ? `<div class="grid">${list.map(v => `
+                    <div class="card video-card">
+                        <video controls preload="metadata" src="${videoUrl(v.id, true)}"></video>
+                        <div class="row spread"><b>${escapeHtml(v.title)}</b><span class="badge badge-${v.status}">${v.status}</span></div>
+                        <div class="small muted">By <a href="profile.html?id=${Number(v.user_id)}">${escapeHtml(v.owner_name)}</a>
+                            ${v.skill_name ? ' · ' + escapeHtml(v.skill_name) : ''} · ${(v.file_size_bytes / 1048576).toFixed(1)} MB · ${formatDate(v.uploaded_at)}</div>
+                        ${v.description ? `<div class="small">${escapeHtml(v.description)}</div>` : ''}
+                        ${v.rejection_reason ? `<div class="small" style="color:var(--danger)">Reason: ${escapeHtml(v.rejection_reason)}</div>` : ''}
+                        <div class="row">
+                            ${v.status !== 'approved' ? `<button class="btn btn-success btn-sm" data-act="approve" data-id="${v.id}">Approve</button>` : ''}
+                            ${v.status !== 'rejected' ? `<button class="btn btn-danger btn-sm" data-act="reject" data-id="${v.id}">Reject</button>` : ''}
+                        </div>
+                    </div>`).join('')}</div>` : `<div class="card empty">No ${videoFilter} videos.</div>`}`);
+        }
+
+        function confirmReject() {
+            const reason = document.getElementById('rejectReason').value.trim();
+            if (!reason) return toast('Please write a reason', 'error');
+            reviewVideo(rejectVideoId, 'reject', reason);
+        }
+
+        async function reviewVideo(id, action, reason) {
+            const res = await call(`/api/admin/videos/${id}/review`, {
+                method: 'POST', body: JSON.stringify({ action, reason: reason || null }),
+            }, action === 'approve' ? 'Video approved' : 'Video rejected');
+            if (res.ok) { closeModal('rejectModal'); renderVideos(); }
+        }
+
+        // ---------- البلاغات ----------
+        async function renderReports() {
+            const res = await call('/api/admin/reports?status=' + reportFilter);
+            if (!res.ok) return put('<div class="card empty">Could not load reports.</div>');
+            if (reportFilter === 'open') setBadge('badgeReports', res.data.reports.length);
+            const list = res.data.reports;
+            put(`<div class="filter-row"><label for="reportFilter">Show</label>
+                    <select id="reportFilter">${['open', 'resolved', 'dismissed'].map(s =>
+                        `<option value="${s}" ${s === reportFilter ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+                 ${list.length ? `<div class="grid">${list.map(r => `
+                    <div class="card report-body">
+                        <div class="row spread"><span class="badge badge-pending">${escapeHtml(r.reason)}</span>
+                            <span class="small muted">${formatDate(r.created_at)}</span></div>
+                        <video controls preload="metadata" style="width:100%;border-radius:10px;background:#000;max-height:200px" src="${videoUrl(r.video_id, true)}"></video>
+                        <div><b>${escapeHtml(r.video_title)}</b> <span class="badge badge-${r.video_status}">${r.video_status}</span></div>
+                        <div class="small muted">Owner: ${escapeHtml(r.owner_name)} · Reported by ${escapeHtml(r.reporter_name)}</div>
+                        ${r.details ? `<div class="item-note" style="background:var(--bg);border-radius:10px;padding:8px 12px;font-size:14px">“${escapeHtml(r.details)}”</div>` : ''}
+                        ${r.status === 'open' ? `<div class="row">
+                            <button class="btn btn-danger btn-sm" data-act="report-remove" data-id="${r.id}">Remove video</button>
+                            <button class="btn btn-outline btn-sm" data-act="report-resolve" data-id="${r.id}">Resolve</button>
+                            <button class="btn btn-gray btn-sm" data-act="report-dismiss" data-id="${r.id}">Dismiss</button></div>` : ''}
+                    </div>`).join('')}</div>` : `<div class="card empty">No ${reportFilter} reports.</div>`}`);
+        }
+
+        async function handleReport(id, action, removeVideo) {
+            const res = await call(`/api/admin/reports/${id}/handle`, {
+                method: 'POST', body: JSON.stringify({ action, remove_video: removeVideo }),
+            }, removeVideo ? 'Video removed and report resolved' : action === 'resolve' ? 'Report resolved' : 'Report dismissed');
+            if (res.ok) renderReports();
+        }
+
+        // ---------- المستخدمين ----------
+        async function renderUsers() {
+            const res = await call('/api/admin/users');
+            if (!res.ok) return put('<div class="card empty">Could not load users.</div>');
+            usersCache = res.data.users;
+            put(`<div class="filter-row"><label for="userSearch">Search</label>
+                    <input type="text" id="userSearch" placeholder="Name or email"></div>
+                 <div class="card"><div class="table-wrap" id="usersTable"></div></div>`);
+            drawUsers('');
+        }
+
+        function drawUsers(q) {
+            q = q.trim().toLowerCase();
+            const list = usersCache.filter(u => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+            document.getElementById('usersTable').innerHTML = list.length ? `<table>
+                <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Sessions</th><th>Rating</th><th>Joined</th><th></th></tr>
+                ${list.map(u => `<tr>
+                    <td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td>
+                    <td><span class="badge ${u.is_active ? 'badge-approved' : 'badge-rejected'}">${u.is_active ? 'active' : 'disabled'}</span></td>
+                    <td>${u.completed_sessions || 0}</td><td>${u.avg_rating ? Number(u.avg_rating).toFixed(1) : '-'}</td>
+                    <td>${formatDate(u.created_at)}</td>
+                    <td>${u.role === 'admin' ? '' : `<button class="btn btn-sm ${u.is_active ? 'btn-danger' : 'btn-success'}"
+                        data-act="toggle-user" data-id="${u.id}" data-active="${u.is_active ? 1 : 0}">${u.is_active ? 'Disable' : 'Enable'}</button>`}</td>
+                </tr>`).join('')}</table>` : '<div class="empty">No users found.</div>';
+        }
+
+        // ---------- المهارات ----------
+        function categoriesList() {
+            const map = {};
+            catalog.forEach(s => map[s.category_id] = s.category);
+            Object.assign(map, extraCategories);
+            return Object.keys(map).map(id => ({ id: Number(id), name: map[id] })).sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        async function renderSkills() {
+            const res = await call('/api/skills');
+            if (!res.ok) return put('<div class="card empty">Could not load skills.</div>');
+            catalog = res.data.skills;
+            const cats = categoriesList();
+            put(`<div class="two-col">
+                    <form class="card" id="categoryForm">
+                        <h3>New category</h3>
+                        <div class="field"><label for="categoryName">Name</label>
+                            <input type="text" id="categoryName" maxlength="100" placeholder="e.g. Cooking"></div>
+                        <button class="btn btn-sm" type="submit">Add category</button>
+                    </form>
+                    <form class="card" id="skillForm">
+                        <h3>New skill</h3>
+                        <div class="field"><label for="newSkillName">Name</label>
+                            <input type="text" id="newSkillName" maxlength="100" placeholder="e.g. Baking"></div>
+                        <div class="field"><label for="newSkillCategory">Category</label>
+                            <select id="newSkillCategory">${cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select></div>
+                        <button class="btn btn-sm" type="submit">Add skill</button>
+                    </form>
+                </div>
+                <div class="card"><h3>All skills (${catalog.length})</h3>
+                    ${cats.map(c => {
+                        const skills = catalog.filter(s => s.category_id === c.id);
+                        return `<div style="margin-bottom:12px"><b>${escapeHtml(c.name)}</b> <span class="small muted">${skills.length}</span><div>
+                            ${skills.length ? skills.map(s => `<span class="chip">${escapeHtml(s.name)}</span>`).join('') : '<span class="small muted">No skills yet</span>'}</div></div>`;
+                    }).join('')}
+                </div>`);
+        }
+
+        async function onSubmit(e) {
+            e.preventDefault();
+            if (e.target.id === 'categoryForm') {
+                const name = document.getElementById('categoryName').value.trim();
+                if (name.length < 2) return toast('Category name is too short', 'error');
+                const res = await call('/api/admin/categories', { method: 'POST', body: JSON.stringify({ name }) }, 'Category added');
+                if (res.ok) { extraCategories[res.data.category_id] = name; renderSkills(); }
+            }
+            if (e.target.id === 'skillForm') {
+                const name = document.getElementById('newSkillName').value.trim();
+                const category_id = Number(document.getElementById('newSkillCategory').value);
+                if (!name) return toast('Write the skill name', 'error');
+                if (!category_id) return toast('Choose a category', 'error');
+                const res = await call('/api/admin/skills', { method: 'POST', body: JSON.stringify({ name, category_id }) }, 'Skill added');
+                if (res.ok) renderSkills();
+            }
+        }
+
+        // ---------- الأحداث ----------
+        async function onClick(e) {
+            const btn = e.target.closest('[data-act]');
+            if (!btn) return;
+            const id = btn.dataset.id;
+            switch (btn.dataset.act) {
+                case 'approve': return reviewVideo(id, 'approve');
+                case 'reject':
+                    rejectVideoId = id;
+                    document.getElementById('rejectReason').value = '';
+                    return openModal('rejectModal');
+                case 'report-remove':
+                    if (!window.confirm('Remove this video and resolve every open report on it?')) return;
+                    return handleReport(id, 'resolve', true);
+                case 'report-resolve': return handleReport(id, 'resolve', false);
+                case 'report-dismiss': return handleReport(id, 'dismiss', false);
+                case 'toggle-user': {
+                    const makeActive = btn.dataset.active !== '1';
+                    if (!makeActive && !window.confirm('Disable this account? The user will not be able to login.')) return;
+                    const res = await call(`/api/admin/users/${id}/active`, {
+                        method: 'POST', body: JSON.stringify({ is_active: makeActive }),
+                    }, makeActive ? 'Account enabled' : 'Account disabled');
+                    if (res.ok) {
+                        const u = usersCache.find(x => String(x.id) === String(id));
+                        if (u) u.is_active = makeActive ? 1 : 0;
+                        drawUsers(document.getElementById('userSearch').value);
+                    }
+                }
+            }
+        }
+
+        function onChange(e) {
+            if (e.target.id === 'videoFilter') { videoFilter = e.target.value; renderVideos(); }
+            if (e.target.id === 'reportFilter') { reportFilter = e.target.value; renderReports(); }
+        }
+
+        function onInput(e) {
+            if (e.target.id === 'userSearch') drawUsers(e.target.value);
+        }
+    </script>
+</body>
+</html>

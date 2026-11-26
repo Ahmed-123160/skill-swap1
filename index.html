@@ -3,187 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skill Swap - Home</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playwrite+DK+Uloopet+Guides&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <title>Skill Swap</title>
+    <link rel="stylesheet" href="common.css">
+    <style>
+        .hero { text-align: center; padding: 56px 24px; }
+        .hero h1 { font-size: clamp(28px, 5vw, 44px); margin-bottom: 12px; }
+        .hero p { font-size: 18px; opacity: .92; max-width: 560px; margin: 0 auto 26px; }
+        .hero-search { display: flex; gap: 10px; max-width: 520px; margin: 0 auto; }
+        .hero-search input { flex: 1; min-width: 0; padding: 14px 20px; border: none; border-radius: 30px; font-size: 16px; outline: none; }
+        .hero-search button { background: white; color: var(--primary); }
+        .hero-cta { margin-top: 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
+        .step { text-align: center; }
+        .step .num { width: 44px; height: 44px; margin: 0 auto 10px; border-radius: 50%; background: var(--gradient); color: white; font-weight: bold; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+        .step h3 { margin-bottom: 6px; }
+        a.chip { text-decoration: none; }
+        h2.section { margin: 34px 0 14px; }
+        @media (max-width: 520px) { .hero-search { flex-direction: column; } .container { padding: 18px; } }
+    </style>
 </head>
 <body>
+    <div id="app-header"></div>
 
-<!-- HEADER -->
-<div class="header">
-    <img class="logo" src="image/155-1553063_digital-skill-swapping-cartoon.png" alt="logo">
-    <div class="header-links">
-        <a href="index.html">Home</a>
-        <a href="search.html">Search</a>
-        <a href="dashboard.html">Dashboard</a>
-        <a href="chat.html">Messages</a>
-        <a href="login.html">Login</a>
-        <button onclick="window.location.href='register.html'">Join Now</button>
-    </div>
-</div>
+    <div class="container">
+        <section class="hero-card hero">
+            <h1>Learn a skill. Teach a skill.</h1>
+            <p>Swap what you know with what you want to learn, with real people, for free.</p>
+            <form class="hero-search" id="heroSearch">
+                <input type="text" id="heroQuery" placeholder="What do you want to learn? e.g. Python" aria-label="Search skills or people">
+                <button class="btn" type="submit">Search</button>
+            </form>
+            <div class="hero-cta" id="heroCta"></div>
+        </section>
 
-<!-- LANDING PAGE -->
-<div class="landing-page">
-    <div>
-        <span>Welcome to</span>
-        <h2 style="font-family: 'Playwrite DK Uloopet Guides', cursive;">Skill Swap</h2>
-        <p>Exchange knowledge • Learn together • Grow together</p>
-        <div class="landing-page-search">
-            <input id="searchInput" placeholder="What skill you want to learn?"/>
-            <button id="searchBtn">Search</button>
+        <h2 class="section">How it works</h2>
+        <div class="steps">
+            <div class="card step"><div class="num">1</div><h3>Add your skills</h3><p class="muted">List what you can teach and what you want to learn.</p></div>
+            <div class="card step"><div class="num">2</div><h3>Find a match</h3><p class="muted">Search people or check the matches picked for you.</p></div>
+            <div class="card step"><div class="num">3</div><h3>Send a request</h3><p class="muted">Ask for a session and offer a skill in return.</p></div>
+            <div class="card step"><div class="num">4</div><h3>Learn &amp; review</h3><p class="muted">Finish the session, then rate your teacher.</p></div>
         </div>
+
+        <h2 class="section">Popular skills</h2>
+        <div class="row" id="skillChips"><span class="muted">Loading...</span></div>
     </div>
-    <!-- Hero Message بدلاً من الصورة -->
-    <div class="hero-message">
-        <div class="icons">🤝💡📚</div>
-        <p><strong>Teach what you know • Learn what you love</strong></p>
-        <p>A platform where people exchange skills for free.<br>No money needed — just knowledge and passion.</p>
-        <div class="tagline">"The beautiful thing about learning is that no one can take it away from you."</div>
-    </div>
-</div>
 
-<!-- CATEGORY SECTION -->
-<div class="category">
-    <h1>📚 Popular Categories</h1>
-    <div class="category-ph">
-        <div class="cards" onclick="showSkillModal('Free Learning', 'Learn any skill for free')">
-            <img src="image/html2.png.jpeg" alt="learning">
-            <div class="card-info">
-                <div class="card-name">
-                    <p>Learning</p>
-                    <h2>Free Learning</h2>
-                </div>
-            </div>
-        </div>
-        <div class="cards" onclick="showSkillModal('Cooperation', 'We exchange ideas and skills')">
-            <img src="image/html3.png.jpeg" alt="cooperation">
-            <div class="card-info">
-                <div class="card-name">
-                    <p>Cooperation</p>
-                    <h2>We exchange ideas</h2>
-                </div>
-            </div>
-        </div>
-        <div class="cards" onclick="showSkillModal('Help', 'We help each other grow')">
-            <img src="image/html4.png.jpeg" alt="help">
-            <div class="card-info">
-                <div class="card-name">
-                    <p>Help</p>
-                    <h2>We help each other</h2>
-                </div>
-            </div>
-        </div>
-        <div class="cards" onclick="showSkillModal('Growth', 'Develop your skills')">
-            <img src="image/TLMS_20231117_1200x628-1.png" alt="growth">
-            <div class="card-info">
-                <div class="card-name">
-                    <p>Growth</p>
-                    <h2>Develop skills</h2>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+    <script src="common.js"></script>
+    <script>
+        renderHeader('index');
+        const user = getUser();
 
-<!-- SIGN IN MODAL -->
-<div id="signinModal" class="modal">
-    <div class="modal-content">
-        <h3>🔐 Sign In</h3>
-        <input type="text" id="loginEmail" placeholder="Email">
-        <input type="password" id="loginPassword" placeholder="Password">
-        <br>
-        <button onclick="loginUser()">Login</button>
-        <button onclick="closeModal()">Cancel</button>
-        <p style="margin-top: 10px; font-size: 12px;">Don't have an account? <a href="register.html">Join Now</a></p>
-    </div>
-</div>
+        document.getElementById('heroCta').innerHTML = user
+            ? '<a class="btn" style="background:white;color:var(--primary)" href="dashboard.html">Go to Dashboard</a>'
+            : '<a class="btn" style="background:white;color:var(--primary)" href="register.html">Join Now</a>' +
+              '<a class="btn btn-outline" style="background:transparent;color:white;border-color:white" href="login.html">Login</a>';
 
-<!-- TOAST MESSAGE -->
-<div id="toast" class="toast"></div>
+        document.getElementById('heroSearch').addEventListener('submit', e => {
+            e.preventDefault();
+            const q = document.getElementById('heroQuery').value.trim();
+            location.href = 'search.html' + (q ? '?q=' + encodeURIComponent(q) : '');
+        });
 
-<script>
-    function showMessage(msg) {
-        let toast = document.getElementById('toast');
-        toast.textContent = msg;
-        toast.style.display = 'block';
-        setTimeout(() => {
-            toast.style.display = 'none';
-        }, 2000);
-    }
-
-    function showSkillModal(title, desc) {
-        showMessage(`📚 ${title}: ${desc}`);
-    }
-
-    function openModal() {
-        document.getElementById('signinModal').style.display = 'flex';
-    }
-
-    function closeModal() {
-        document.getElementById('signinModal').style.display = 'none';
-    }
-
-    async function loginUser() {
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
-        
-        if(!email || !password) {
-            showMessage('Please enter email and password');
-            return;
-        }
-        
-        try {
-            const response = await fetch('http://localhost:8004/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            });
-            
-            const result = await response.json();
-            
-            if(response.ok) {
-                localStorage.setItem('user', JSON.stringify(result.user));
-                showMessage('✅ Login successful! Redirecting...');
-                setTimeout(() => {
-                    window.location.href = 'dashboard.html';
-                }, 1000);
-            } else {
-                showMessage('❌ ' + result.detail);
+        (async function loadSkills() {
+            const box = document.getElementById('skillChips');
+            const res = await apiFetch('/api/skills').catch(() => null);
+            if (!res || !res.ok || !res.data.skills.length) {
+                box.innerHTML = '<span class="muted">Skills will show up here once the server is running.</span>';
+                return;
             }
-        } catch(error) {
-            showMessage('❌ Cannot connect to server');
-        }
-    }
-
-    // Search functionality
-    document.getElementById('searchBtn').addEventListener('click', function() {
-        let input = document.getElementById('searchInput');
-        let searchText = input.value.trim();
-        if(searchText === '') {
-            showMessage('✏️ Please enter a skill to search');
-        } else {
-            showMessage('🔍 Searching for: "' + searchText + '"');
-            setTimeout(() => {
-                window.location.href = `search.html?q=${encodeURIComponent(searchText)}`;
-            }, 1000);
-        }
-    });
-
-    document.getElementById('searchInput').addEventListener('keypress', function(e) {
-        if(e.key === 'Enter') {
-            document.getElementById('searchBtn').click();
-        }
-    });
-
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        let modal = document.getElementById('signinModal');
-        if(event.target === modal) {
-            modal.style.display = 'none';
-        }
-    }
-</script>
+            box.innerHTML = res.data.skills.map(s =>
+                `<a class="chip" href="search.html?q=${encodeURIComponent(s.name)}">${escapeHtml(s.name)}</a>`).join('');
+        })();
+    </script>
 </body>
 </html>

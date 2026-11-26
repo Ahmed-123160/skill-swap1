@@ -4,137 +4,197 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile - Skill Swap</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; }
-        .header {
-            background: white;
-            padding: 15px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .logo { font-size: 24px; font-weight: bold; }
-        .logo span:first-child { color: #667eea; }
-        .logo span:last-child { color: #764ba2; }
-        .nav a { margin-left: 25px; text-decoration: none; color: #555; }
-        .container { max-width: 800px; margin: 0 auto; padding: 30px; }
-        .profile-card {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-        }
-        .profile-header {
-            display: flex;
-            align-items: center;
-            gap: 25px;
-            margin-bottom: 30px;
-        }
-        .avatar {
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 48px;
-            font-weight: bold;
-        }
-        .skill-section { margin-top: 25px; }
-        .skill-section h3 { color: #667eea; margin-bottom: 15px; }
-        .skill-tag {
-            display: inline-block;
-            background: #e0e7ff;
-            padding: 8px 16px;
-            border-radius: 25px;
-            margin: 5px;
-            color: #667eea;
-        }
-        .back-btn {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 25px;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
-        .contact-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 25px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 20px;
-        }
-    </style>
+    <link rel="stylesheet" href="common.css">
 </head>
 <body>
-    <div class="header">
-        <div class="logo"><span>Skill</span> <span>Swap</span></div>
-        <div class="nav">
-            <a href="index.html">Home</a>
-            <a href="search.html">Search</a>
-            <a href="dashboard.html">Dashboard</a>
+    <div id="app-header"></div>
+
+    <div class="container narrow stack">
+        <div><button class="btn btn-gray btn-sm" onclick="history.length > 1 ? history.back() : window.location.href='search.html'">← Back</button></div>
+        <div id="profile" class="stack"><div class="empty">Loading profile...</div></div>
+    </div>
+
+    <!-- طلب تبادل -->
+    <div id="swapModal" class="modal-backdrop" hidden>
+        <div class="modal">
+            <h3>Request a swap</h3>
+            <div class="field">
+                <label for="wantedSelect">I want to learn</label>
+                <select id="wantedSelect"></select>
+            </div>
+            <div class="field">
+                <label for="offeredSelect">In return I can teach</label>
+                <select id="offeredSelect"></select>
+            </div>
+            <div class="field">
+                <label for="swapMessage">Message (optional)</label>
+                <textarea id="swapMessage" maxlength="500" placeholder="Say hello and when you are free..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray btn-sm" id="swapCancel">Cancel</button>
+                <button class="btn btn-sm" id="swapSend">Send request</button>
+            </div>
         </div>
     </div>
 
-    <div class="container">
-        <button class="back-btn" onclick="window.location.href='search.html'">← Back</button>
-        <div class="profile-card" id="profileContent">
-            <div style="text-align:center;padding:50px;">Loading profile...</div>
+    <!-- إبلاغ عن فيديو -->
+    <div id="reportModal" class="modal-backdrop" hidden>
+        <div class="modal">
+            <h3>Report this video</h3>
+            <div class="field">
+                <label for="reportReason">Reason</label>
+                <select id="reportReason">
+                    <option value="inappropriate">Inappropriate content</option>
+                    <option value="spam">Spam</option>
+                    <option value="misleading">Misleading</option>
+                    <option value="copyright">Copyright</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="reportDetails">Details (optional)</label>
+                <textarea id="reportDetails" maxlength="500"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray btn-sm" id="reportCancel">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="reportSend">Send report</button>
+            </div>
         </div>
     </div>
 
+    <script src="common.js"></script>
     <script>
-        const currentUser = JSON.parse(localStorage.getItem('user'));
-        if(!currentUser) window.location.href = 'login.html';
+        const me = requireLogin();
+        const userId = parseInt(new URLSearchParams(window.location.search).get('id'));
+        let profile = null;
+        let myTeach = [];
+        let reportVideoId = null;
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const userId = parseInt(urlParams.get('id'));
+        if (me) init();
 
-        async function loadProfile() {
-            try {
-                const response = await fetch('http://localhost:8004/api/users/' + currentUser.id);
-                const users = await response.json();
-                const profileUser = users.users.find(u => u.id === userId);
-                
-                const skillsResponse = await fetch('http://localhost:8004/api/skills/' + userId);
-                const skillsData = await skillsResponse.json();
-                const skills = skillsData.skills || [];
-                
-                const teachSkills = skills.filter(s => s.skill_type === 'teach');
-                const learnSkills = skills.filter(s => s.skill_type === 'learn');
-                
-                document.getElementById('profileContent').innerHTML = `
-                    <div class="profile-header">
-                        <div class="avatar">${profileUser.name.charAt(0)}</div>
-                        <div>
-                            <h2>${profileUser.name}</h2>
-                            <p>📧 ${profileUser.email}</p>
-                            <p>⭐ ${profileUser.rating || 0}/5</p>
-                        </div>
-                    </div>
-                    <div class="skill-section">
-                        <h3>🎓 Skills I Can Teach</h3>
-                        ${teachSkills.length === 0 ? '<p>No skills listed</p>' : teachSkills.map(s => `<span class="skill-tag">${s.skill_name}</span>`).join('')}
-                    </div>
-                    <div class="skill-section">
-                        <h3>📚 Skills I Want to Learn</h3>
-                        ${learnSkills.length === 0 ? '<p>No skills listed</p>' : learnSkills.map(s => `<span class="skill-tag">${s.skill_name}</span>`).join('')}
-                    </div>
-                    <button class="contact-btn" onclick="window.location.href='chat.html?user=${userId}'">💬 Send Message</button>
-                `;
-            } catch(error) {
-                document.getElementById('profileContent').innerHTML = '<div style="text-align:center;padding:50px;">Error loading profile</div>';
-            }
+        async function init() {
+            renderHeader('');
+            if (!userId) return showMissing();
+            const [res, mine] = await Promise.all([call('/api/users/' + userId), call('/api/my/skills')]);
+            if (!res.ok) return showMissing();
+            profile = res.data;
+            if (mine.ok) myTeach = mine.data.skills.filter(s => s.skill_type === 'teach');
+            render();
+
+            document.getElementById('swapCancel').onclick = () => closeModal('swapModal');
+            document.getElementById('swapSend').onclick = sendSwap;
+            document.getElementById('reportCancel').onclick = () => closeModal('reportModal');
+            document.getElementById('reportSend').onclick = sendReport;
         }
 
-        loadProfile();
+        function showMissing() {
+            document.getElementById('profile').innerHTML = '<div class="card empty">This profile does not exist.</div>';
+        }
+
+        function render() {
+            const isMe = profile.id === me.id;
+            const teach = profile.skills.filter(s => s.skill_type === 'teach');
+            const learn = profile.skills.filter(s => s.skill_type === 'learn');
+            document.title = profile.name + ' - Skill Swap';
+
+            const chips = (list, cls) => list.length
+                ? list.map(s => `<span class="chip ${cls}">${escapeHtml(s.name)}</span>`).join('')
+                : '<span class="muted">Nothing listed</span>';
+
+            document.getElementById('profile').innerHTML = `
+                <div class="card">
+                    <div class="row" style="gap:20px">
+                        <div class="avatar avatar-lg">${initial(profile.name)}</div>
+                        <div style="min-width:0">
+                            <h2>${escapeHtml(profile.name)}</h2>
+                            <div class="muted">📍 ${escapeHtml(profile.location || 'Location not set')}</div>
+                            <div style="margin-top:6px">${stars(profile.avg_rating, profile.reviews_count)}
+                                <span class="small muted"> · ${profile.completed_sessions || 0} sessions taught</span></div>
+                        </div>
+                    </div>
+                    ${isMe ? '<p class="muted small" style="margin-top:14px">This is how others see your profile.</p>' : `
+                    <div class="row" style="margin-top:18px">
+                        <button class="btn" id="swapBtn" ${teach.length ? '' : 'disabled title="This user has not listed any skill to teach"'}>🔄 Request a swap</button>
+                        <a class="btn btn-outline" href="chat.html?user=${profile.id}">💬 Send message</a>
+                    </div>`}
+                </div>
+
+                <div class="card">
+                    <h3>🎓 Skills I Can Teach</h3>${chips(teach, '')}
+                    <h3 style="margin-top:18px">📚 Skills I Want to Learn</h3>${chips(learn, 'chip-learn')}
+                </div>
+
+                <div class="card">
+                    <h3>🎬 Videos</h3>
+                    ${profile.videos.length ? `<div class="grid">${profile.videos.map(v => `
+                        <div class="video-card">
+                            <video controls preload="metadata" src="${videoUrl(v.id)}"></video>
+                            <b>${escapeHtml(v.title)}</b>
+                            ${v.skill_name ? `<div class="small muted">${escapeHtml(v.skill_name)}</div>` : ''}
+                            ${v.description ? `<div class="small">${escapeHtml(v.description)}</div>` : ''}
+                            ${isMe ? '' : `<div><button class="btn btn-outline btn-sm" data-report="${v.id}">Report</button></div>`}
+                        </div>`).join('')}</div>` : '<div class="empty">No videos yet.</div>'}
+                </div>
+
+                <div class="card">
+                    <h3>⭐ Reviews</h3>
+                    ${profile.reviews.length ? profile.reviews.map(r => `
+                        <div class="review">
+                            <div class="row spread">
+                                <span class="stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+                                <span class="small muted">${formatDate(r.created_at)}</span>
+                            </div>
+                            ${r.comment ? `<div>${escapeHtml(r.comment)}</div>` : ''}
+                            <div class="small muted">${escapeHtml(r.reviewer_name)} · ${escapeHtml(r.skill_name)}</div>
+                        </div>`).join('') : '<div class="empty">No reviews yet.</div>'}
+                </div>`;
+
+            const swapBtn = document.getElementById('swapBtn');
+            if (swapBtn) swapBtn.onclick = openSwap;
+            document.querySelectorAll('[data-report]').forEach(b =>
+                b.addEventListener('click', () => { reportVideoId = b.dataset.report; openModal('reportModal'); }));
+        }
+
+        // ---------- طلب تبادل ----------
+        function openSwap() {
+            const teach = profile.skills.filter(s => s.skill_type === 'teach');
+            document.getElementById('wantedSelect').innerHTML =
+                teach.map(s => `<option value="${s.skill_id}">${escapeHtml(s.name)}</option>`).join('');
+            document.getElementById('offeredSelect').innerHTML =
+                '<option value="">Nothing, I just want to learn</option>' +
+                myTeach.map(s => `<option value="${s.skill_id}">${escapeHtml(s.name)}</option>`).join('');
+            document.getElementById('swapMessage').value = '';
+            openModal('swapModal');
+        }
+
+        async function sendSwap() {
+            const offered = document.getElementById('offeredSelect').value;
+            const btn = document.getElementById('swapSend');
+            btn.disabled = true;
+            const res = await call('/api/requests', {
+                method: 'POST',
+                body: JSON.stringify({
+                    receiver_id: profile.id,
+                    skill_wanted_id: Number(document.getElementById('wantedSelect').value),
+                    skill_offered_id: offered ? Number(offered) : null,
+                    message: document.getElementById('swapMessage').value.trim() || null,
+                }),
+            }, 'Request sent');
+            btn.disabled = false;
+            if (res.ok) closeModal('swapModal');
+        }
+
+        // ---------- بلاغ ----------
+        async function sendReport() {
+            const res = await call(`/api/videos/${reportVideoId}/report`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    reason: document.getElementById('reportReason').value,
+                    details: document.getElementById('reportDetails').value.trim() || null,
+                }),
+            }, 'Report sent. Thank you.');
+            if (res.ok) closeModal('reportModal');
+        }
     </script>
 </body>
 </html>

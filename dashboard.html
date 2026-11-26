@@ -4,158 +4,305 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Skill Swap</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; }
-        .header {
-            background: white;
-            padding: 15px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .logo { font-size: 24px; font-weight: bold; }
-        .logo span:first-child { color: #667eea; }
-        .logo span:last-child { color: #764ba2; }
-        .nav a { margin-left: 25px; text-decoration: none; color: #555; }
-        .logout-btn { background: #dc3545; color: white !important; padding: 8px 20px; border-radius: 25px; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 30px; }
-        .welcome-card {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 40px;
-            border-radius: 20px;
-            margin-bottom: 30px;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-        }
-        .stat-number { font-size: 36px; font-weight: bold; color: #667eea; }
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-        }
-        .card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-        }
-        .card h3 { margin-bottom: 20px; color: #667eea; }
-        .skill-tag {
-            display: inline-block;
-            background: #e0e7ff;
-            padding: 8px 16px;
-            border-radius: 25px;
-            margin: 5px;
-            color: #667eea;
-        }
-        .btn-add {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 25px;
-            cursor: pointer;
-            margin-top: 15px;
-        }
-        .empty-message { color: #888; padding: 15px 0; text-align: center; }
-        @media (max-width: 768px) { .main-grid { grid-template-columns: 1fr; } .header { flex-direction: column; gap: 15px; } }
-    </style>
+    <link rel="stylesheet" href="common.css">
 </head>
 <body>
-    <div class="header">
-        <div class="logo"><span>Skill</span> <span>Swap</span></div>
-        <div class="nav">
-            <a href="index.html">Home</a>
-            <a href="search.html">Search</a>
-            <a href="dashboard.html">Dashboard</a>
-            <a href="chat.html">Messages</a>
-            <a href="#" id="logoutBtn" class="logout-btn">Logout</a>
-        </div>
-    </div>
+    <div id="app-header"></div>
 
-    <div class="container">
-        <div class="welcome-card"><h1 id="welcomeMessage">Welcome back! 👋</h1></div>
-        <div class="stats-grid">
-            <div class="stat-card"><div class="stat-number" id="learnCount">0</div><div>Skills to Learn</div></div>
+    <div class="container stack">
+        <div class="hero-card">
+            <h1 id="welcome">Welcome 👋</h1>
+            <p>Teach what you know, learn what you love.</p>
+        </div>
+
+        <div id="pendingBanner" class="banner" hidden></div>
+
+        <div class="stat-grid">
             <div class="stat-card"><div class="stat-number" id="teachCount">0</div><div>Skills to Teach</div></div>
+            <div class="stat-card"><div class="stat-number" id="learnCount">0</div><div>Skills to Learn</div></div>
+            <div class="stat-card"><div class="stat-number" id="sessionsCount">0</div><div>Sessions Taught</div></div>
+            <div class="stat-card"><div class="stat-number" id="ratingValue">-</div><div>Average Rating</div></div>
         </div>
-        <div class="main-grid">
-            <div class="card"><h3>📚 Skills to Learn</h3><div id="learnSkillsList"><div class="empty-message">No skills added</div></div><button class="btn-add" onclick="addSkill('learn')">+ Add Skill</button></div>
-            <div class="card"><h3>🎓 Skills to Teach</h3><div id="teachSkillsList"><div class="empty-message">No skills added</div></div><button class="btn-add" onclick="addSkill('teach')">+ Add Skill</button></div>
+
+        <div class="two-col">
+            <div class="card">
+                <h3>🎓 Skills I Can Teach</h3>
+                <div id="teachList"></div>
+                <button class="btn btn-sm" id="addTeachBtn" style="margin-top:12px">+ Add Skill</button>
+            </div>
+            <div class="card">
+                <h3>📚 Skills I Want to Learn</h3>
+                <div id="learnList"></div>
+                <button class="btn btn-sm" id="addLearnBtn" style="margin-top:12px">+ Add Skill</button>
+            </div>
+        </div>
+
+        <section class="card">
+            <h3>✨ Suggested For You</h3>
+            <p class="muted small" style="margin-bottom:14px">People who teach something you want to learn. Green skills match your list.</p>
+            <div id="matches" class="grid"></div>
+        </section>
+
+        <section class="card">
+            <div class="row spread" style="margin-bottom:14px">
+                <h3 style="margin:0">🎬 My Intro Videos</h3>
+                <button class="btn btn-sm" id="uploadBtn">Upload Video</button>
+            </div>
+            <p class="muted small" style="margin-bottom:14px">A short video showing how you teach. An admin reviews it before it appears on your profile. MP4 or WebM, up to 50 MB.</p>
+            <div id="videos" class="grid"></div>
+        </section>
+    </div>
+
+    <!-- نافذة إضافة مهارة -->
+    <div id="skillModal" class="modal-backdrop" hidden>
+        <div class="modal">
+            <h3 id="skillModalTitle">Add Skill</h3>
+            <div class="field">
+                <label for="skillSelect">Skill</label>
+                <select id="skillSelect"></select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray btn-sm" id="skillCancel">Cancel</button>
+                <button class="btn btn-sm" id="skillSave">Add</button>
+            </div>
         </div>
     </div>
 
+    <!-- نافذة رفع فيديو -->
+    <div id="videoModal" class="modal-backdrop" hidden>
+        <div class="modal">
+            <h3>Upload Intro Video</h3>
+            <div class="field">
+                <label for="videoTitle">Title</label>
+                <input type="text" id="videoTitle" maxlength="150" placeholder="e.g. Python basics in 2 minutes">
+            </div>
+            <div class="field">
+                <label for="videoDesc">Description (optional)</label>
+                <textarea id="videoDesc" maxlength="1000"></textarea>
+            </div>
+            <div class="field">
+                <label for="videoSkill">Related skill (optional)</label>
+                <select id="videoSkill"></select>
+            </div>
+            <div class="field">
+                <label for="videoFile">Video file</label>
+                <input type="file" id="videoFile" accept=".mp4,.webm,video/mp4,video/webm">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray btn-sm" id="videoCancel">Cancel</button>
+                <button class="btn btn-sm" id="videoSave">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
     <script>
-        const user = JSON.parse(localStorage.getItem('user'));
-        if(!user) window.location.href = 'login.html';
-        document.getElementById('welcomeMessage').innerHTML = `Welcome ${user.name}! 👋`;
+        const me = requireLogin();
+        if (me) init();
 
-        let learnSkills = [];
-        let teachSkills = [];
+        let catalog = [];       // كل المهارات المتاحة
+        let mySkills = [];      // مهاراتي
+        let addType = 'teach';  // النافذة بتضيف teach ولا learn
 
-        async function loadSkills() {
-            try {
-                const response = await fetch(`http://localhost:8004/api/skills/${user.id}`);
-                const data = await response.json();
-                learnSkills = data.skills.filter(s => s.skill_type === 'learn').map(s => s.skill_name);
-                teachSkills = data.skills.filter(s => s.skill_type === 'teach').map(s => s.skill_name);
-                displaySkills();
-            } catch(error) {
-                console.error('Error loading skills:', error);
+        function init() {
+            renderHeader('dashboard');
+            document.getElementById('welcome').textContent = 'Welcome ' + me.name + '! 👋';
+            loadAll();
+            document.getElementById('addTeachBtn').onclick = () => openAddSkill('teach');
+            document.getElementById('addLearnBtn').onclick = () => openAddSkill('learn');
+            document.getElementById('skillCancel').onclick = () => closeModal('skillModal');
+            document.getElementById('skillSave').onclick = saveSkill;
+            document.getElementById('uploadBtn').onclick = openUpload;
+            document.getElementById('videoCancel').onclick = () => closeModal('videoModal');
+            document.getElementById('videoSave').onclick = uploadVideo;
+            document.getElementById('teachList').addEventListener('click', onRemoveClick);
+            document.getElementById('learnList').addEventListener('click', onRemoveClick);
+            document.getElementById('videos').addEventListener('click', onVideoClick);
+        }
+
+        async function loadAll() {
+            const [cat, skills, matches, incoming, videos, profile] = await Promise.all([
+                call('/api/skills'),
+                call('/api/my/skills'),
+                call('/api/matches'),
+                call('/api/requests?box=incoming'),
+                call('/api/videos/mine'),
+                me.role === 'admin' ? Promise.resolve(null) : call('/api/users/' + me.id),
+            ]);
+            if (cat.ok) catalog = cat.data.skills;
+            if (skills.ok) { mySkills = skills.data.skills; renderSkills(); }
+            if (matches.ok) renderMatches(matches.data.matches);
+            if (incoming.ok) renderBanner(incoming.data.requests);
+            if (videos.ok) renderVideos(videos.data.videos);
+            if (profile && profile.ok) {
+                document.getElementById('sessionsCount').textContent = profile.data.completed_sessions || 0;
+                const r = profile.data.avg_rating;
+                document.getElementById('ratingValue').textContent = r ? Number(r).toFixed(1) : '-';
             }
         }
 
-        function displaySkills() {
-            const learnContainer = document.getElementById('learnSkillsList');
-            if(learnSkills.length === 0) learnContainer.innerHTML = '<div class="empty-message">No skills added</div>';
-            else learnContainer.innerHTML = learnSkills.map(s => `<span class="skill-tag">${s}</span>`).join('');
-            document.getElementById('learnCount').innerText = learnSkills.length;
-
-            const teachContainer = document.getElementById('teachSkillsList');
-            if(teachSkills.length === 0) teachContainer.innerHTML = '<div class="empty-message">No skills added</div>';
-            else teachContainer.innerHTML = teachSkills.map(s => `<span class="skill-tag">${s}</span>`).join('');
-            document.getElementById('teachCount').innerText = teachSkills.length;
+        // ---------- المهارات ----------
+        function renderSkills() {
+            for (const type of ['teach', 'learn']) {
+                const list = mySkills.filter(s => s.skill_type === type);
+                document.getElementById(type + 'Count').textContent = list.length;
+                document.getElementById(type + 'List').innerHTML = list.length
+                    ? list.map(s => `<span class="chip ${type === 'learn' ? 'chip-learn' : ''}">${escapeHtml(s.name)}
+                        <button class="chip-x" data-id="${s.skill_id}" data-type="${type}" aria-label="Remove ${escapeHtml(s.name)}">×</button></span>`).join('')
+                    : '<div class="empty">No skills added yet</div>';
+            }
         }
 
-        window.addSkill = async function(type) {
-            const skill = prompt(`Enter skill to ${type === 'learn' ? 'learn' : 'teach'}:`);
-            if(skill && skill.trim()) {
-                try {
-                    const response = await fetch(`http://localhost:8004/api/skills/${user.id}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ skill_name: skill.trim(), skill_type: type })
-                    });
-                    if(response.ok) {
-                        if(type === 'learn') learnSkills.push(skill.trim());
-                        else teachSkills.push(skill.trim());
-                        displaySkills();
-                    }
-                } catch(error) {
-                    console.error('Error adding skill:', error);
-                }
+        async function onRemoveClick(e) {
+            const btn = e.target.closest('.chip-x');
+            if (!btn) return;
+            const res = await call(`/api/my/skills/${btn.dataset.id}/${btn.dataset.type}`, { method: 'DELETE' });
+            if (res.ok) {
+                mySkills = mySkills.filter(s => !(String(s.skill_id) === btn.dataset.id && s.skill_type === btn.dataset.type));
+                renderSkills();
             }
-        };
+        }
 
-        document.getElementById('logoutBtn').addEventListener('click', function(e) {
-            e.preventDefault();
-            localStorage.removeItem('user');
-            window.location.href = 'index.html';
-        });
+        // قائمة المهارات مقسمة بالتصنيف (optgroup)
+        function skillOptions(list, emptyLabel) {
+            const groups = {};
+            list.forEach(s => (groups[s.category] = groups[s.category] || []).push(s));
+            let html = emptyLabel ? `<option value="">${escapeHtml(emptyLabel)}</option>` : '';
+            for (const cat of Object.keys(groups)) {
+                html += `<optgroup label="${escapeHtml(cat)}">` +
+                    groups[cat].map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') + '</optgroup>';
+            }
+            return html;
+        }
 
-        loadSkills();
+        function openAddSkill(type) {
+            addType = type;
+            const taken = new Set(mySkills.map(s => s.skill_id));
+            const available = catalog.filter(s => !taken.has(s.id));
+            document.getElementById('skillModalTitle').textContent =
+                type === 'teach' ? 'Add a skill you can teach' : 'Add a skill you want to learn';
+            const select = document.getElementById('skillSelect');
+            select.innerHTML = available.length ? skillOptions(available) : '<option value="">No more skills available</option>';
+            document.getElementById('skillSave').disabled = !available.length;
+            openModal('skillModal');
+        }
+
+        async function saveSkill() {
+            const skillId = Number(document.getElementById('skillSelect').value);
+            if (!skillId) return;
+            const res = await call('/api/my/skills', {
+                method: 'POST',
+                body: JSON.stringify({ skill_id: skillId, skill_type: addType }),
+            }, 'Skill added');
+            if (res.ok) {
+                closeModal('skillModal');
+                const r = await call('/api/my/skills');
+                if (r.ok) { mySkills = r.data.skills; renderSkills(); }
+                const m = await call('/api/matches');
+                if (m.ok) renderMatches(m.data.matches);
+            }
+        }
+
+        // ---------- المقترحات ----------
+        function renderMatches(list) {
+            const learnIds = new Set(mySkills.filter(s => s.skill_type === 'learn').map(s => s.skill_id));
+            const box = document.getElementById('matches');
+            if (!list.length) {
+                box.innerHTML = '<div class="empty" style="grid-column:1/-1">No matches yet. Add skills you want to learn and we will find teachers for you.</div>';
+                return;
+            }
+            box.innerHTML = list.map(u => {
+                const teach = (u.skills || []).filter(s => s.skill_type === 'teach');
+                return `<div class="user-card" data-id="${u.id}">
+                    <div class="row">
+                        <div class="avatar">${initial(u.name)}</div>
+                        <div style="min-width:0">
+                            <div class="user-name">${escapeHtml(u.name)}</div>
+                            <div class="muted small">${escapeHtml(u.location || '')}</div>
+                        </div>
+                    </div>
+                    ${u.mutual ? '<span class="badge badge-mutual">Mutual swap possible</span>' : ''}
+                    <div>${teach.map(s => `<span class="chip ${learnIds.has(s.skill_id) ? 'chip-hit' : ''}">${escapeHtml(s.name)}</span>`).join('')}</div>
+                </div>`;
+            }).join('');
+            box.querySelectorAll('.user-card').forEach(c =>
+                c.addEventListener('click', () => window.location.href = 'profile.html?id=' + c.dataset.id));
+        }
+
+        // ---------- طلبات جديدة ----------
+        function renderBanner(requests) {
+            const pending = requests.filter(r => r.status === 'pending').length;
+            const el = document.getElementById('pendingBanner');
+            if (!pending) { el.hidden = true; return; }
+            el.innerHTML = `<span>You have <b>${pending}</b> pending swap request${pending > 1 ? 's' : ''} waiting for your answer.</span>
+                            <a href="swaps.html">Review now →</a>`;
+            el.hidden = false;
+        }
+
+        // ---------- الفيديوهات ----------
+        function renderVideos(list) {
+            const box = document.getElementById('videos');
+            if (!list.length) {
+                box.innerHTML = '<div class="empty" style="grid-column:1/-1">You have not uploaded a video yet.</div>';
+                return;
+            }
+            box.innerHTML = list.map(v => `<div class="video-card">
+                <video controls preload="metadata" src="${videoUrl(v.id, true)}"></video>
+                <div class="row spread">
+                    <b>${escapeHtml(v.title)}</b>
+                    <span class="badge badge-${v.status}">${v.status}</span>
+                </div>
+                ${v.skill_name ? `<div class="small muted">${escapeHtml(v.skill_name)}</div>` : ''}
+                ${v.status === 'rejected' && v.rejection_reason ? `<div class="small" style="color:var(--danger)">Reason: ${escapeHtml(v.rejection_reason)}</div>` : ''}
+                <div><button class="btn btn-danger btn-sm" data-delete="${v.id}">Delete</button></div>
+            </div>`).join('');
+        }
+
+        async function onVideoClick(e) {
+            const btn = e.target.closest('[data-delete]');
+            if (!btn || !window.confirm('Delete this video?')) return;
+            const res = await call('/api/videos/' + btn.dataset.delete, { method: 'DELETE' }, 'Video deleted');
+            if (res.ok) {
+                const r = await call('/api/videos/mine');
+                if (r.ok) renderVideos(r.data.videos);
+            }
+        }
+
+        function openUpload() {
+            document.getElementById('videoTitle').value = '';
+            document.getElementById('videoDesc').value = '';
+            document.getElementById('videoFile').value = '';
+            document.getElementById('videoSkill').innerHTML = skillOptions(catalog, 'No specific skill');
+            openModal('videoModal');
+        }
+
+        async function uploadVideo() {
+            const title = document.getElementById('videoTitle').value.trim();
+            const file = document.getElementById('videoFile').files[0];
+            if (title.length < 3) return toast('Please write a title (3 characters or more)', 'error');
+            if (!file) return toast('Please choose a video file', 'error');
+            if (!/\.(mp4|webm)$/i.test(file.name)) return toast('Only MP4 or WebM videos are allowed', 'error');
+            if (file.size > 50 * 1024 * 1024) return toast('The video is larger than 50 MB', 'error');
+
+            const form = new FormData();
+            form.append('title', title);
+            form.append('description', document.getElementById('videoDesc').value.trim());
+            const skill = document.getElementById('videoSkill').value;
+            if (skill) form.append('skill_id', skill);
+            form.append('file', file);
+
+            const btn = document.getElementById('videoSave');
+            btn.disabled = true;
+            btn.textContent = 'Uploading...';
+            const res = await call('/api/videos', { method: 'POST', body: form }, 'Uploaded. An admin will review it soon.');
+            btn.disabled = false;
+            btn.textContent = 'Upload';
+            if (res.ok) {
+                closeModal('videoModal');
+                const r = await call('/api/videos/mine');
+                if (r.ok) renderVideos(r.data.videos);
+            }
+        }
     </script>
 </body>
 </html>

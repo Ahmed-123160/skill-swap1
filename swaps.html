@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Swaps - Skill Swap</title>
+    <link rel="stylesheet" href="common.css">
+    <style>
+        .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tab {
+            background: white; border: 2px solid transparent; color: #555;
+            padding: 10px 20px; border-radius: 30px; cursor: pointer; font-size: 15px;
+        }
+        .tab.active { border-color: var(--primary); color: var(--primary); font-weight: bold; }
+        .tab .nav-badge { margin-left: 6px; }
+        .item { display: flex; flex-direction: column; gap: 8px; }
+        .item-note { background: var(--bg); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+        .star-pick { display: flex; gap: 4px; }
+        .star-pick button { background: none; border: none; font-size: 32px; color: #ccc; cursor: pointer; line-height: 1; }
+        .star-pick button.on { color: #f5a623; }
+        a.person { color: var(--primary); font-weight: bold; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div id="app-header"></div>
+
+    <div class="container narrow stack">
+        <div>
+            <h1 class="page-title">My Swaps</h1>
+            <p class="muted">Requests you received and sent, and your sessions.</p>
+        </div>
+
+        <div class="tabs" role="tablist">
+            <button class="tab" data-tab="incoming" role="tab">Received <span id="badgeIncoming" class="nav-badge" hidden></span></button>
+            <button class="tab" data-tab="sent" role="tab">Sent</button>
+            <button class="tab" data-tab="sessions" role="tab">Sessions <span id="badgeSessions" class="nav-badge" hidden></span></button>
+        </div>
+
+        <div id="panel" class="stack"><div class="empty">Loading...</div></div>
+    </div>
+
+    <!-- تحديد موعد -->
+    <div id="scheduleModal" class="modal-backdrop" hidden>
+        <div class="modal">
+            <h3>Set session time</h3>
+            <div class="field">
+                <label for="scheduleAt">Date and time</label>
+                <input type="datetime-local" id="scheduleAt" style="width:100%;padding:11px;border:2px solid var(--border);border-radius:10px;font-size:14px">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray btn-sm" id="scheduleCancel">Cancel</button>
+                <button class="btn btn-sm" id="scheduleSave">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- تقييم -->
+    <div id="reviewModal" class="modal-backdrop" hidden>
+        <div class="modal">
+            <h3 id="reviewTitle">Review your teacher</h3>
+            <div class="field">
+                <label>Rating</label>
+                <div class="star-pick" id="starPick" role="radiogroup" aria-label="Rating"></div>
+            </div>
+            <div class="field">
+                <label for="reviewComment">Comment (optional)</label>
+                <textarea id="reviewComment" maxlength="1000" placeholder="How was the session?"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-gray btn-sm" id="reviewCancel">Cancel</button>
+                <button class="btn btn-sm" id="reviewSave">Submit review</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script>
+        const me = requireLogin();
+        let tab = 'incoming';
+        let data = { incoming: [], sent: [], sessions: [] };
+        let scheduleSessionId = null;
+        let reviewSessionId = null;
+        let rating = 0;
+
+        if (me) init();
+
+        function init() {
+            renderHeader('swaps');
+            const fromHash = location.hash.replace('#', '');
+            if (['incoming', 'sent', 'sessions'].includes(fromHash)) tab = fromHash;
+
+            document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+            document.getElementById('panel').addEventListener('click', onAction);
+            document.getElementById('scheduleCancel').onclick = () => closeModal('scheduleModal');
+            document.getElementById('scheduleSave').onclick = saveSchedule;
+            document.getElementById('reviewCancel').onclick = () => closeModal('reviewModal');
+            document.getElementById('reviewSave').onclick = saveReview;
+            buildStars();
+            loadAll();
+        }
+
+        async function loadAll() {
+            const [inc, sent, ses] = await Promise.all([
+                call('/api/requests?box=incoming'),
+                call('/api/requests?box=outgoing'),
+                call('/api/sessions'),
+            ]);
+            if (inc.ok) data.incoming = inc.data.requests;
+            if (sent.ok) data.sent = sent.data.requests;
+            if (ses.ok) data.sessions = ses.data.sessions;
+            showTab(tab);
+        }
+
+        function showTab(name) {
+            tab = name;
+            history.replaceState(null, '', '#' + name);
+            document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+            const pending = data.incoming.filter(r => r.status === 'pending').length;
+            const scheduled = data.sessions.filter(s => s.status === 'scheduled').length;
+            setBadge('badgeIncoming', pending);
+            setBadge('badgeSessions', scheduled);
+            const panel = document.getElementById('panel');
+            panel.innerHTML = name === 'sessions' ? renderSessions() : renderRequests(name);
+        }
+
+        function setBadge(id, n) {
+            const el = document.getElementById(id);
+            el.textContent = n;
+            el.hidden = !n;
+        }
+
+        function person(id, name) {
+            return `<a class="person" href="profile.html?id=${Number(id)}">${escapeHtml(name)}</a>`;
+        }
+
+        // ---------- الطلبات ----------
+        function renderRequests(box) {
+            const list = data[box];
+            if (!list.length) {
+                return `<div class="card empty">${box === 'incoming'
+                    ? 'No requests yet. When someone asks to learn from you, it appears here.'
+                    : 'You have not sent any request. Find someone in <a href="search.html">Search</a>.'}</div>`;
+            }
+            return list.map(r => {
+                const incoming = box === 'incoming';
+                const who = incoming ? person(r.requester_id, r.requester_name) : person(r.receiver_id, r.receiver_name);
+                const line = incoming
+                    ? `${who} wants to learn <b>${escapeHtml(r.skill_wanted)}</b> from you` +
+                      (r.skill_offered ? ` and offers to teach you <b>${escapeHtml(r.skill_offered)}</b>.` : '.')
+                    : `You asked ${who} to teach you <b>${escapeHtml(r.skill_wanted)}</b>` +
+                      (r.skill_offered ? ` in return for <b>${escapeHtml(r.skill_offered)}</b>.` : '.');
+                let actions = '';
+                if (r.status === 'pending') {
+                    actions = incoming
+                        ? `<button class="btn btn-success btn-sm" data-act="accept" data-id="${r.id}">Accept</button>
+                           <button class="btn btn-danger btn-sm" data-act="reject" data-id="${r.id}">Decline</button>`
+                        : `<button class="btn btn-gray btn-sm" data-act="cancel-request" data-id="${r.id}">Cancel request</button>`;
+                }
+                return `<div class="card item">
+                    <div class="row spread"><span class="small muted">${formatDate(r.created_at)}</span>
+                        <span class="badge badge-${r.status}">${r.status}</span></div>
+                    <div>${line}</div>
+                    ${r.message ? `<div class="item-note">“${escapeHtml(r.message)}”</div>` : ''}
+                    ${actions ? `<div class="row">${actions}</div>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        // ---------- الجلسات ----------
+        function renderSessions() {
+            const list = data.sessions;
+            if (!list.length) {
+                return '<div class="card empty">No sessions yet. A session is created when a request is accepted.</div>';
+            }
+            return list.map(s => {
+                const teaching = s.my_role === 'teacher';
+                const other = teaching ? person(s.learner_id, s.learner_name) : person(s.teacher_id, s.teacher_name);
+                const otherId = teaching ? s.learner_id : s.teacher_id;
+                let actions = '';
+                if (s.status === 'scheduled') {
+                    actions += `<button class="btn btn-outline btn-sm" data-act="schedule" data-id="${s.id}">${s.scheduled_at ? 'Change time' : 'Set time'}</button>`;
+                    if (s.can_complete) actions += `<button class="btn btn-success btn-sm" data-act="complete" data-id="${s.id}">Mark as completed</button>`;
+                    actions += `<button class="btn btn-gray btn-sm" data-act="cancel-session" data-id="${s.id}">Cancel</button>`;
+                }
+                if (s.can_review) actions += `<button class="btn btn-sm" data-act="review" data-id="${s.id}">⭐ Leave a review</button>`;
+                actions += `<a class="btn btn-outline btn-sm" href="chat.html?user=${Number(otherId)}">💬 Message</a>`;
+
+                const note = s.status === 'scheduled' && teaching
+                    ? '<div class="small muted">Your student confirms when the session is done.</div>' : '';
+                const review = s.review_rating
+                    ? `<div class="item-note"><span class="stars">${'★'.repeat(s.review_rating)}${'☆'.repeat(5 - s.review_rating)}</span>
+                       ${s.review_comment ? ' ' + escapeHtml(s.review_comment) : ''}</div>` : '';
+                return `<div class="card item">
+                    <div class="row spread"><b>${escapeHtml(s.skill_name)}</b>
+                        <span class="badge badge-${s.status}">${s.status}</span></div>
+                    <div>${teaching ? 'You teach' : 'You learn from'} ${other}</div>
+                    ${s.scheduled_at && s.status === 'scheduled' ? `<div>🕒 ${formatDate(s.scheduled_at)}</div>` : ''}
+                    ${s.completed_at ? `<div class="small muted">Completed ${formatDate(s.completed_at)}</div>` : ''}
+                    ${review}${note}
+                    <div class="row">${actions}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // ---------- الأزرار ----------
+        async function onAction(e) {
+            const btn = e.target.closest('[data-act]');
+            if (!btn) return;
+            const id = btn.dataset.id;
+            const act = btn.dataset.act;
+
+            if (act === 'accept' || act === 'reject') {
+                const res = await call(`/api/requests/${id}/respond`, { method: 'POST', body: JSON.stringify({ action: act }) });
+                if (res.ok) {
+                    const n = res.data.sessions_created;
+                    toast(act === 'accept' ? `Accepted. ${n} session${n > 1 ? 's' : ''} created.` : 'Request declined.', 'success');
+                    tab = act === 'accept' ? 'sessions' : tab;
+                }
+            } else if (act === 'cancel-request') {
+                await call(`/api/requests/${id}/cancel`, { method: 'POST' }, 'Request cancelled');
+            } else if (act === 'cancel-session') {
+                if (!window.confirm('Cancel this session?')) return;
+                await call(`/api/sessions/${id}/cancel`, { method: 'POST' }, 'Session cancelled');
+            } else if (act === 'complete') {
+                if (!window.confirm('Confirm that this session took place?')) return;
+                await call(`/api/sessions/${id}/complete`, { method: 'POST' }, 'Session marked as completed');
+            } else if (act === 'schedule') {
+                scheduleSessionId = id;
+                const input = document.getElementById('scheduleAt');
+                input.value = '';
+                input.min = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                openModal('scheduleModal');
+                return;
+            } else if (act === 'review') {
+                reviewSessionId = id;
+                setRating(0);
+                document.getElementById('reviewComment').value = '';
+                openModal('reviewModal');
+                return;
+            }
+            loadAll();
+        }
+
+        async function saveSchedule() {
+            const value = document.getElementById('scheduleAt').value;
+            if (!value) return toast('Choose a date and time', 'error');
+            const res = await call(`/api/sessions/${scheduleSessionId}/schedule`, {
+                method: 'POST', body: JSON.stringify({ scheduled_at: value }),
+            }, 'Time saved');
+            if (res.ok) { closeModal('scheduleModal'); loadAll(); }
+        }
+
+        function buildStars() {
+            const box = document.getElementById('starPick');
+            box.innerHTML = [1, 2, 3, 4, 5].map(n =>
+                `<button type="button" data-star="${n}" role="radio" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`).join('');
+            box.addEventListener('click', e => {
+                const b = e.target.closest('[data-star]');
+                if (b) setRating(Number(b.dataset.star));
+            });
+        }
+
+        function setRating(n) {
+            rating = n;
+            document.querySelectorAll('#starPick button').forEach(b =>
+                b.classList.toggle('on', Number(b.dataset.star) <= n));
+        }
+
+        async function saveReview() {
+            if (!rating) return toast('Choose a rating from 1 to 5 stars', 'error');
+            const res = await call(`/api/sessions/${reviewSessionId}/review`, {
+                method: 'POST',
+                body: JSON.stringify({ rating, comment: document.getElementById('reviewComment').value.trim() || null }),
+            }, 'Thank you for your review');
+            if (res.ok) { closeModal('reviewModal'); loadAll(); }
+        }
+    </script>
+</body>
+</html>
